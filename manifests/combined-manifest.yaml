@@ -1,0 +1,898 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fluent-bit-read
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fluent-bit-read
+subjects:
+  - kind: ServiceAccount
+    name: fluent-bit
+    namespace: otel
+roleRef:
+  kind: ClusterRole
+  name: fluent-bit-read
+  apiGroup: rbac.authorization.k8s.io
+
+
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentbit-config
+  namespace: otel
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush        5
+        Log_Level    info
+        Parsers_File parsers.conf
+
+    [INPUT]
+        Name        tail
+        Path        /var/log/containers/*.log
+        Parser      docker
+        Tag         kube.*
+
+    [FILTER]
+        Name        kubernetes
+        Match       kube.*
+        Kube_URL    https://kubernetes.default.svc:443
+        Merge_Log   On
+
+    [OUTPUT]
+        Name        forward
+        Match       *
+        Host        otel-collector.otel.svc.cluster.local
+        Port        24224
+
+  parsers.conf: |
+    [PARSER]
+        Name        docker
+        Format      json
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L
+
+
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit
+  namespace: otel
+spec:
+  selector:
+    matchLabels:
+      app: fluent-bit
+  template:
+    metadata:
+      labels:
+        app: fluent-bit
+    spec:
+      containers:
+      - name: fluent-bit
+        image: fluent/fluent-bit:latest
+        volumeMounts:
+        - name: config-volume
+          mountPath: /fluent-bit/etc/
+          readOnly: true
+        - name: varlog
+          mountPath: /var/log/
+          readOnly: true
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+      volumes:
+      - name: config-volume
+        configMap:
+          name: fluentbit-config
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector-binding
+subjects:
+  - kind: ServiceAccount
+    name: otel-sa
+    namespace: otel
+roleRef:
+  kind: ClusterRole
+  name: otel-collector-role
+  apiGroup: rbac.authorization.k8s.io
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: stacksimplify/kubenginx:2.0.0
+        ports:
+        - containerPort: 80
+        
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  type: NodePort
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 80        
+      targetPort: 80  
+      nodePort: 30080
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: otel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      serviceAccountName: otel-sa
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:latest
+          args:
+            - "--config=/etc/otel/config.yaml"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/otel
+      volumes:
+        - name: config-volume
+          configMap:
+            name: otel-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: otel
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      protocol: TCP
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      protocol: TCP
+      port: 4318
+      targetPort: 4318
+    - name: prometheus  # Exposes Prometheus metrics at /metrics
+      protocol: TCP
+      port: 9464
+      targetPort: 9464
+    - name: fluent-forward
+      port: 24224
+      targetPort: 24224
+
+
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-config
+  namespace: otel
+data:
+  config.yaml: |
+    extensions:
+      sigv4auth:
+        service: aps
+        region: us-east-1
+
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+          http:
+
+      fluentforward:
+        endpoint: 0.0.0.0:24224
+
+      hostmetrics:
+        scrapers:
+          cpu:
+          disk:
+          memory:
+          filesystem:
+          load:
+          network:
+
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: 'otel-collector'
+              scrape_interval: 10s
+              static_configs:
+                - targets: ['127.0.0.1:9464']
+
+            - job_name: 'kubernetes-control-plane'
+              scrape_interval: 10s
+              kubernetes_sd_configs:
+                - role: endpoints
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_service_name]
+                  regex: 'kube-apiserver|kube-scheduler|kube-controller-manager'
+                  action: keep
+
+            - job_name: 'kubernetes-pods'
+              scrape_interval: 10s
+              kubernetes_sd_configs:
+                - role: pod
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                  action: keep
+                  regex: true
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                  action: replace
+                  target_label: __metrics_path__
+                  regex: (.+)
+                - source_labels: [__meta_kubernetes_pod_ip]
+                  action: replace
+                  target_label: instance
+
+      kubeletstats:
+        collection_interval: 10s
+        auth_type: serviceAccount
+        endpoint: "https://127.0.0.1:10250"
+        insecure_skip_verify: true
+        extra_metadata_labels:
+          - container.id
+
+      k8s_cluster:
+        collection_interval: 30s
+
+    processors:
+      batch:
+
+    exporters:
+
+      debug:
+        verbosity: detailed
+
+      prometheusremotewrite:
+        endpoint: "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-0f43ef28-4e43-4e79-889f-74e24f046eea/api/v1/remote_write"
+        auth:
+          authenticator: sigv4auth
+
+      awscloudwatchlogs:
+        region: "us-east-1"
+        log_group_name: "/aws/otel/logs"
+        log_stream_name: "otel-eks-acc"
+
+      awsemf:
+        region: "us-east-1"
+        namespace: "OtelMetrics"
+        dimension_rollup_option: "NoDimensionRollup"  
+
+      awsxray:
+        region: "us-east-1"
+
+    service:
+      extensions: [sigv4auth]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [awsxray,debug]
+
+        metrics:
+          receivers: [hostmetrics, kubeletstats, k8s_cluster, prometheus]
+          processors: [batch]
+          exporters: [prometheusremotewrite,awsemf,debug]
+
+        logs:
+          receivers: [fluentforward]
+          processors: [batch]
+          exporters: [awscloudwatchlogs,debug]
+
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-sa
+  namespace: otel
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::156041406847:role/OpenTelemetryRole"
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector-binding1
+subjects:
+  - kind: ServiceAccount
+    name: otel-sa
+    namespace: otel
+roleRef:
+  kind: ClusterRole
+  name: otel-collector
+  apiGroup: rbac.authorization.k8s.io
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-hpa-reader
+rules:
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-hpa-reader-binding
+subjects:
+  - kind: ServiceAccount
+    name: otel-sa
+    namespace: otel
+roleRef:
+  kind: ClusterRole
+  name: otel-hpa-reader
+  apiGroup: rbac.authorization.k8s.io
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-kubelet-reader
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes/metrics
+      - nodes/stats
+      - nodes/proxy
+      - nodes
+      - pods
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-kubelet-reader-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-kubelet-reader
+subjects:
+  - kind: ServiceAccount
+    name: otel-collector
+    namespace: otel
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "services", "endpoints", "namespaces", "replicationcontrollers", "resourcequotas"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list", "watch"]
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fluent-bit-read
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fluent-bit-read
+subjects:
+  - kind: ServiceAccount
+    name: fluent-bit
+    namespace: otel
+roleRef:
+  kind: ClusterRole
+  name: fluent-bit-read
+  apiGroup: rbac.authorization.k8s.io
+
+
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentbit-config
+  namespace: otel
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush        5
+        Log_Level    info
+        Parsers_File parsers.conf
+
+    [INPUT]
+        Name        tail
+        Path        /var/log/containers/*.log
+        Parser      docker
+        Tag         kube.*
+
+    [FILTER]
+        Name        kubernetes
+        Match       kube.*
+        Kube_URL    https://kubernetes.default.svc:443
+        Merge_Log   On
+
+    [OUTPUT]
+        Name        forward
+        Match       *
+        Host        otel-collector.otel.svc.cluster.local
+        Port        24224
+
+  parsers.conf: |
+    [PARSER]
+        Name        docker
+        Format      json
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L
+
+
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit
+  namespace: otel
+spec:
+  selector:
+    matchLabels:
+      app: fluent-bit
+  template:
+    metadata:
+      labels:
+        app: fluent-bit
+    spec:
+      containers:
+      - name: fluent-bit
+        image: fluent/fluent-bit:latest
+        volumeMounts:
+        - name: config-volume
+          mountPath: /fluent-bit/etc/
+          readOnly: true
+        - name: varlog
+          mountPath: /var/log/
+          readOnly: true
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+      volumes:
+      - name: config-volume
+        configMap:
+          name: fluentbit-config
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector-binding
+subjects:
+  - kind: ServiceAccount
+    name: otel-sa
+    namespace: otel
+roleRef:
+  kind: ClusterRole
+  name: otel-collector-role
+  apiGroup: rbac.authorization.k8s.io
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: stacksimplify/kubenginx:2.0.0
+        ports:
+        - containerPort: 80
+        
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  type: NodePort
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 80        
+      targetPort: 80  
+      nodePort: 30080
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: otel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      serviceAccountName: otel-sa
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:latest
+          args:
+            - "--config=/etc/otel/config.yaml"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/otel
+      volumes:
+        - name: config-volume
+          configMap:
+            name: otel-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: otel
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      protocol: TCP
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      protocol: TCP
+      port: 4318
+      targetPort: 4318
+    - name: prometheus  # Exposes Prometheus metrics at /metrics
+      protocol: TCP
+      port: 9464
+      targetPort: 9464
+    - name: fluent-forward
+      port: 24224
+      targetPort: 24224
+
+
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-config
+  namespace: otel
+data:
+  config.yaml: |
+    extensions:
+      sigv4auth:
+        service: aps
+        region: us-east-1
+
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+          http:
+
+      fluentforward:
+        endpoint: 0.0.0.0:24224
+
+      hostmetrics:
+        scrapers:
+          cpu:
+          disk:
+          memory:
+          filesystem:
+          load:
+          network:
+
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: 'otel-collector'
+              scrape_interval: 10s
+              static_configs:
+                - targets: ['127.0.0.1:9464']
+
+            - job_name: 'kubernetes-control-plane'
+              scrape_interval: 10s
+              kubernetes_sd_configs:
+                - role: endpoints
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_service_name]
+                  regex: 'kube-apiserver|kube-scheduler|kube-controller-manager'
+                  action: keep
+
+            - job_name: 'kubernetes-pods'
+              scrape_interval: 10s
+              kubernetes_sd_configs:
+                - role: pod
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                  action: keep
+                  regex: true
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                  action: replace
+                  target_label: __metrics_path__
+                  regex: (.+)
+                - source_labels: [__meta_kubernetes_pod_ip]
+                  action: replace
+                  target_label: instance
+
+      kubeletstats:
+        collection_interval: 10s
+        auth_type: serviceAccount
+        endpoint: "https://127.0.0.1:10250"
+        insecure_skip_verify: true
+        extra_metadata_labels:
+          - container.id
+
+      k8s_cluster:
+        collection_interval: 30s
+
+    processors:
+      batch:
+
+    exporters:
+
+      debug:
+        verbosity: detailed
+
+      prometheusremotewrite:
+        endpoint: "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-0f43ef28-4e43-4e79-889f-74e24f046eea/api/v1/remote_write"
+        auth:
+          authenticator: sigv4auth
+
+      awscloudwatchlogs:
+        region: "us-east-1"
+        log_group_name: "/aws/otel/logs"
+        log_stream_name: "otel-eks-acc"
+
+      awsemf:
+        region: "us-east-1"
+        namespace: "OtelMetrics"
+        dimension_rollup_option: "NoDimensionRollup"  
+
+      awsxray:
+        region: "us-east-1"
+
+    service:
+      extensions: [sigv4auth]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [awsxray,debug]
+
+        metrics:
+          receivers: [hostmetrics, kubeletstats, k8s_cluster, prometheus]
+          processors: [batch]
+          exporters: [prometheusremotewrite,awsemf,debug]
+
+        logs:
+          receivers: [fluentforward]
+          processors: [batch]
+          exporters: [awscloudwatchlogs,debug]
+
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-sa
+  namespace: otel
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::156041406847:role/OpenTelemetryRole"
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector-binding1
+subjects:
+  - kind: ServiceAccount
+    name: otel-sa
+    namespace: otel
+roleRef:
+  kind: ClusterRole
+  name: otel-collector
+  apiGroup: rbac.authorization.k8s.io
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-hpa-reader
+rules:
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-hpa-reader-binding
+subjects:
+  - kind: ServiceAccount
+    name: otel-sa
+    namespace: otel
+roleRef:
+  kind: ClusterRole
+  name: otel-hpa-reader
+  apiGroup: rbac.authorization.k8s.io
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-kubelet-reader
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes/metrics
+      - nodes/stats
+      - nodes/proxy
+      - nodes
+      - pods
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-kubelet-reader-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-kubelet-reader
+subjects:
+  - kind: ServiceAccount
+    name: otel-collector
+    namespace: otel
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "services", "endpoints", "namespaces", "replicationcontrollers", "resourcequotas"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list", "watch"]
+

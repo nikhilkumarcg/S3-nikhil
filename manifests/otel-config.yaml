@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-config
+  namespace: otel
+data:
+  config.yaml: |
+    extensions:
+      sigv4auth:
+        service: aps
+        region: us-east-1
+
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+          http:
+
+      fluentforward:
+        endpoint: 0.0.0.0:24224
+
+      hostmetrics:
+        scrapers:
+          cpu:
+          disk:
+          memory:
+          filesystem:
+          load:
+          network:
+
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: 'otel-collector'
+              scrape_interval: 10s
+              static_configs:
+                - targets: ['127.0.0.1:9464']
+
+            - job_name: 'kubernetes-control-plane'
+              scrape_interval: 10s
+              kubernetes_sd_configs:
+                - role: endpoints
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_service_name]
+                  regex: 'kube-apiserver|kube-scheduler|kube-controller-manager'
+                  action: keep
+
+            - job_name: 'kubernetes-pods'
+              scrape_interval: 10s
+              kubernetes_sd_configs:
+                - role: pod
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                  action: keep
+                  regex: true
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                  action: replace
+                  target_label: __metrics_path__
+                  regex: (.+)
+                - source_labels: [__meta_kubernetes_pod_ip]
+                  action: replace
+                  target_label: instance
+
+      kubeletstats:
+        collection_interval: 10s
+        auth_type: serviceAccount
+        endpoint: "https://127.0.0.1:10250"
+        insecure_skip_verify: true
+        extra_metadata_labels:
+          - container.id
+
+      k8s_cluster:
+        collection_interval: 30s
+
+    processors:
+      batch:
+
+    exporters:
+
+      debug:
+        verbosity: detailed
+
+      awscloudwatchlogs:
+        region: "us-east-1"
+        log_group_name: "/aws/otel/logs"
+        log_stream_name: "otel-eks-acc"
+
+      awsemf:
+        region: "us-east-1"
+        namespace: "OtelMetrics"
+        dimension_rollup_option: "NoDimensionRollup"  
+
+      awsxray:
+        region: "us-east-1"
+
+    service:
+      extensions: [sigv4auth]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [awsxray,debug]
+
+        metrics:
+          receivers: [hostmetrics, kubeletstats, k8s_cluster, prometheus]
+          processors: [batch]
+          exporters: [awsemf,debug]
+
+        logs:
+          receivers: [fluentforward]
+          processors: [batch]
+          exporters: [awscloudwatchlogs,debug]
+

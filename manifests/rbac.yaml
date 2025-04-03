@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-kubelet-reader
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes/metrics
+      - nodes/stats
+      - nodes/proxy
+      - nodes
+      - pods
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-kubelet-reader-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-kubelet-reader
+subjects:
+  - kind: ServiceAccount
+    name: otel-collector
+    namespace: otel
+
