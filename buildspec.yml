@@ -1,0 +1,20 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18  # Use the latest supported Node.js version
+    commands:
+      - echo Installing dependencies...
+      - npm install -g aws-cdk  # Ensure CDK CLI is installed
+      - npm install  # Install project dependencies
+
+  build:
+    commands:
+      - echo Synthesizing CDK app...
+      - npx cdk synth  # Synthesize the CDK stack
+
+artifacts:
+  files:
+    - '**/*'
+  base-directory: cdk.out  # CDK output directory
