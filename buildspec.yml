@@ -3,16 +3,16 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      nodejs: 18  # Use the latest supported Node.js version
+      nodejs: 20  # Upgrade Node.js to 20 (since Node.js 18 is nearing end-of-life)
     commands:
-      - echo Installing dependencies...
-      - npm install -g aws-cdk  # Ensure CDK CLI is installed
+      - echo "Installing latest AWS CDK CLI..."
+      - npm install -g aws-cdk@latest  # Install latest CDK CLI
       - npm install  # Install project dependencies
 
   build:
     commands:
-      - echo Synthesizing CDK app...
-      - npx cdk synth  # Synthesize the CDK stack
+      - echo "Synthesizing AWS CDK application..."
+      - npx cdk synth  # Generate CloudFormation templates
 
 artifacts:
   files:
