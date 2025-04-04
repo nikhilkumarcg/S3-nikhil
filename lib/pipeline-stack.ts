@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
-import { CodePipeline, CodePipelineSource, ShellStep } from 'aws-cdk-lib/pipelines';
+import { CodePipeline, ShellStep } from 'aws-cdk-lib/pipelines';
+import { CodePipelineSource } from 'aws-cdk-lib/pipelines';
 import { Construct } from 'constructs';
 import { DeploymentStage } from './deployment-stage';
 
@@ -16,8 +17,8 @@ export class PipelineStack extends cdk.Stack {
 
       // ✅ Define the source and build steps
       synth: new ShellStep('Synth', {
-        input: CodePipelineSource.gitHub('nikhilkumarcg/s3-nikhil', 'main', {
-          authentication: cdk.SecretValue.secretsManager('my-s3-token') // 🔥 Added GitHub authentication
+        input: CodePipelineSource.connection('nikhilkumarcg/S3-nikhil', 'main', {
+          connectionArn: 'arn:aws:codeconnections:us-east-1:156041406847:connection/fc92262e-696a-48fe-b272-6acac498e9ad' // 🔥 Updated GitHub connection ARN
         }),
         commands: ['npm install', 'npx cdk synth']
       })
