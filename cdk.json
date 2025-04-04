@@ -17,6 +17,7 @@
     ]
   },
   "context": {
+    "aws-cdk:role-arn": "arn:aws:iam::820186421740:role/CdkDeployRole",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": [

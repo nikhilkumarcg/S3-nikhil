@@ -14,9 +14,11 @@ export class PipelineStack extends cdk.Stack {
       // ✅ Enable cross-account artifact encryption
       crossAccountKeys: true,
 
-      // Define the source and build steps
+      // ✅ Define the source and build steps
       synth: new ShellStep('Synth', {
-        input: CodePipelineSource.gitHub('nikhilkumarcg/cdk-s3', 'main'),
+        input: CodePipelineSource.gitHub('nikhilkumarcg/s3-nikhil', 'main', {
+          authentication: cdk.SecretValue.secretsManager('my-github-token') // 🔥 Added GitHub authentication
+        }),
         commands: ['npm install', 'npx cdk synth']
       })
     });
@@ -33,5 +35,11 @@ export class PipelineStack extends cdk.Stack {
     pipeline.addStage(new DeploymentStage(this, 'CentralDeployment', {
       env: { account: '156041406847', region: 'us-east-1' }
     }));
+
+    // ✅ Log pipeline creation
+    new cdk.CfnOutput(this, 'PipelineStackName', {
+      value: this.stackName,
+      description: 'Name of the CDK Pipeline Stack',
+    });
   }
 }
