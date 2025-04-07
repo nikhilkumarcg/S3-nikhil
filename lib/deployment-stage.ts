@@ -2,7 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { Stage } from 'aws-cdk-lib';
 import { CloudTrailStack } from './cloudtrial';
-import { EventBusStack } from './eventBusSource';
+import { EventBusStack } from './eventbussource';
 import { EventBusDestinationStack } from './eventbusdestination';
 import { GrafanaCdkStack } from './grafana';
 
