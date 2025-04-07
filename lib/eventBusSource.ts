@@ -4,7 +4,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import * as eventTargets from 'aws-cdk-lib/aws-events-targets';
 
-export class EventBusStack1 extends cdk.Stack {
+export class EventBusStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 

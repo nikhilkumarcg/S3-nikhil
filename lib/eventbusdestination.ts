@@ -18,7 +18,7 @@ export class EventBusDestinationStack extends cdk.Stack {
     });
 
     // List of source account IDs
-    const sourceAccounts = ['820186421740', '156041406847']; // Add more source accounts as needed
+    const sourceAccounts = ['820186421740']; // Add more source accounts as needed
 
     // Add a policy statement for each source account
     sourceAccounts.forEach(accountId => {
