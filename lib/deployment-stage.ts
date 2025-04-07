@@ -3,7 +3,7 @@ import { Construct } from 'constructs';
 import { Stage } from 'aws-cdk-lib';
 import { CloudTrailStack } from './cloudtrialupdated';
 import { EventBusDestinationStack } from './eventbusdestination';
-import { EventBusStack } from './eventbussource';
+import { EventBusStack } from './eventbussrcupdated';
 
 export class DeploymentStage extends Stage {
   constructor(scope: Construct, id: string, props?: cdk.StageProps) {
