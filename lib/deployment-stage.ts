@@ -1,10 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { Stage } from 'aws-cdk-lib';
-import { CloudTrailStack } from './cloudtrial';
-import { EventBusStack } from './eventbussource';
+import { CloudTrailStack } from './cloudtrialupdated';
 import { EventBusDestinationStack } from './eventbusdestination';
-import { GrafanaCdkStack } from './grafana';
+import { EventBusStack } from './eventbussource';
 
 export class DeploymentStage extends Stage {
   constructor(scope: Construct, id: string, props?: cdk.StageProps) {
