@@ -12,10 +12,11 @@ import { GrafanaCdkStack } from '../lib/grafana';
 import { CloudTrailStack1 } from '../lib/cloudtrialupdated';
 import { PipelineStack } from '../lib/pipeline-stack';
 
+
 const app = new cdk.App();
 
-new PipelineStack(app, 'MultiAccountPipeline', {
-  env: { account: '156041406847', region: 'us-east-1' }
-});
+// new PipelineStack(app, 'MultiAccountPipeline', {
+//   env: { account: '156041406847', region: 'us-east-1' }
+// });
 
 

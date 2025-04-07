@@ -17,23 +17,24 @@ export class EventBusDestinationStack extends cdk.Stack {
       eventBusName: 's3receiverbus',
     });
 
-    // Define the first source account to be added dynamically
-    const sourceAccount = '820186421740'; // Ensure this is a valid AWS account number
+    // List of source account IDs
+    const sourceAccounts = ['820186421740', '156041406847']; // Add more source accounts as needed
 
-    const policyStatement = new iam.PolicyStatement({
-      sid: `AllowEventsFromSourceAccount${sourceAccount}`,
-      effect: iam.Effect.ALLOW,
-      principals: [new iam.AccountPrincipal(sourceAccount)],
-      actions: ['events:PutEvents'],
-      resources: [`arn:aws:events:${region}:${destinationAccount}:event-bus/s3receiverbus`],
+    // Add a policy statement for each source account
+    sourceAccounts.forEach(accountId => {
+      eventBus.addToResourcePolicy(new iam.PolicyStatement({
+        sid: `AllowEventsFromSourceAccount${accountId}`,
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.AccountPrincipal(accountId)],
+        actions: ['events:PutEvents'],
+        resources: [`arn:aws:events:${region}:${destinationAccount}:event-bus/s3receiverbus`],
+      }));
     });
-
-    eventBus.addToResourcePolicy(policyStatement);
 
     // Create CloudWatch Log Group
     const logGroup = new logs.LogGroup(this, 'S3ReceiverLogGroup', {
       logGroupName: '/aws/events/receivers3accesslogs',
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Change this based on your retention requirements
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Adjust as needed
     });
 
     // Create the EventBridge Rule
