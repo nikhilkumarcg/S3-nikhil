@@ -1,10 +1,14 @@
 import * as cdk from 'aws-cdk-lib';
 import * as eks from 'aws-cdk-lib/aws-eks';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
+// Removed duplicate import of lambda
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { Construct } from 'constructs';
+import { ASSET_FILE, LAYER_SOURCE_DIR } from '@aws-cdk/asset-kubectl-v20';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as s3_assets from 'aws-cdk-lib/aws-s3-assets';
+import { FileSystem } from 'aws-cdk-lib';
 
 export class EksYamlStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -63,3 +67,16 @@ export class EksYamlStack extends cdk.Stack {
     combinedManifest.node.addDependency(namespaceResource);
   }
 }
+
+
+
+declare const fn: lambda.Function;
+const asset = new s3_assets.Asset(this, 'layer-asset', {
+  path: ASSET_FILE,
+  assetHash: FileSystem.fingerprint(LAYER_SOURCE_DIR),
+});
+
+fn.addLayers(new lambda.LayerVersion(this, 'KubectlLayer', {
+  code: lambda.Code.fromBucket(asset.bucket, asset.s3ObjectKey),
+  description: '/opt/kubectl/kubectl and /opt/helm/helm',
+}));
