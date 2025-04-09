@@ -1,0 +1,62 @@
+name: Deploy CDK to Multiple Accounts
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CDK_NEW_BOOTSTRAP: "1"
+      AWS_REGION: us-east-1
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Install AWS CDK
+        run: npm install -g aws-cdk
+
+      - name: Configure AWS credentials (Source Account)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::820186421740:role/GitHubActionsDeploymentRole
+          role-session-name: GitHubActionsSession
+          aws-region: us-east-1
+
+      - name: Synthesize CDK App (Source Account)
+        run: npx cdk synth
+
+      - name: Deploy to Source Account (820186421740)
+        run: |
+          npx cdk deploy SourceDeployment-820186421740 \
+            --require-approval never \
+            --context target=source \
+            --outputs-file output-source.json
+
+      - name: Configure AWS credentials (Central Account)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::156041406847:role/GitHubActionsDeploymentRole
+          role-session-name: GitHubActionsSession
+          aws-region: us-east-1
+
+      - name: Deploy to Central Account (156041406847)
+        run: |
+          npx cdk deploy CentralDeployment \
+            --require-approval never \
+            --context target=central \
+            --outputs-file output-central.json
