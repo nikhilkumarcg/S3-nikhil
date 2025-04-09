@@ -40,12 +40,18 @@ jobs:
       - name: Synthesize CDK App (Source Account)
         run: npx cdk synth
 
-      - name: Deploy to Source Account (820186421740)
+      - name: List Stacks (Source Account)
+        id: list_source_stacks
         run: |
-          npx cdk deploy SourceDeployment-820186421740 \
-            --require-approval never \
-            --context target=source \
-            --outputs-file output-source.json
+          npx cdk list > stacks.txt
+          cat stacks.txt
+          grep '^SourceDeployment-820186421740/' stacks.txt > filtered.txt
+          cat filtered.txt
+        shell: bash
+
+      - name: Deploy to Source Account
+        run: |
+          xargs -a filtered.txt npx cdk deploy --require-approval never --outputs-file output-source.json
 
       - name: Configure AWS credentials (Central Account)
         uses: aws-actions/configure-aws-credentials@v2
@@ -54,9 +60,15 @@ jobs:
           role-session-name: GitHubActionsSession
           aws-region: us-east-1
 
-      - name: Deploy to Central Account (156041406847)
+      - name: List Stacks (Central Account)
+        id: list_central_stacks
         run: |
-          npx cdk deploy CentralDeployment \
-            --require-approval never \
-            --context target=central \
-            --outputs-file output-central.json
+          npx cdk list > stacks-central.txt
+          cat stacks-central.txt
+          grep '^CentralDeployment/' stacks-central.txt > filtered-central.txt
+          cat filtered-central.txt
+        shell: bash
+
+      - name: Deploy to Central Account
+        run: |
+          xargs -a filtered-central.txt npx cdk deploy --require-approval never --outputs-file output-central.json
