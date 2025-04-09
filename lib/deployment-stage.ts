@@ -17,7 +17,7 @@ export class DeploymentStage extends Stage {
 
     if (account === CENTRAL_ACCOUNT_ID) {
       new EventBusDestinationStack(this, 'EventBusDestinationStack', { env: props?.env ?? {} });
-      //new GrafanaCdkStack(this, 'GrafanaCdkStack', { env: props?.env ?? {} });
+      new GrafanaCdkStack(this, 'GrafanaCdkStack', { env: props?.env ?? {} });
     } else {
       new CloudTrailStack(this, 'CloudTrailStack', { env: props?.env ?? {} });  
       new EventBusStack(this, 'EventBusStack', { env: props?.env ?? {} });
