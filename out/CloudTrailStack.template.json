@@ -1,0 +1,250 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+      "CloudTrailBucket98B0BFE1": {
+        "Type": "AWS::S3::Bucket",
+        "Properties": {
+          "PublicAccessBlockConfiguration": {
+            "BlockPublicAcls": true,
+            "BlockPublicPolicy": true,
+            "IgnorePublicAcls": true,
+            "RestrictPublicBuckets": true
+          },
+          "VersioningConfiguration": {
+            "Status": "Enabled"
+          }
+        },
+        "UpdateReplacePolicy": "Retain",
+        "DeletionPolicy": "Retain",
+        "Metadata": {
+          "aws:cdk:path": "CloudTrailStack/CloudTrailBucket/Resource"
+        }
+      },
+      "CloudTrailBucketPolicy2A856177": {
+        "Type": "AWS::S3::BucketPolicy",
+        "Properties": {
+          "Bucket": { "Ref": "CloudTrailBucket98B0BFE1" },
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Deny",
+                "Principal": { "AWS": "*" },
+                "Action": "s3:*",
+                "Condition": {
+                  "Bool": { "aws:SecureTransport": "false" }
+                },
+                "Resource": [
+                  { "Fn::GetAtt": ["CloudTrailBucket98B0BFE1", "Arn"] },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        { "Fn::GetAtt": ["CloudTrailBucket98B0BFE1", "Arn"] },
+                        "/*"
+                      ]
+                    ]
+                  }
+                ]
+              },
+              {
+                "Effect": "Allow",
+                "Principal": { "Service": "cloudtrail.amazonaws.com" },
+                "Action": "s3:GetBucketAcl",
+                "Resource": { "Fn::GetAtt": ["CloudTrailBucket98B0BFE1", "Arn"] }
+              },
+              {
+                "Effect": "Allow",
+                "Principal": { "Service": "cloudtrail.amazonaws.com" },
+                "Action": "s3:PutObject",
+                "Condition": {
+                  "StringEquals": {
+                    "s3:x-amz-acl": "bucket-owner-full-control"
+                  }
+                },
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      { "Fn::GetAtt": ["CloudTrailBucket98B0BFE1", "Arn"] },
+                      "/AWSLogs/",
+                      { "Ref": "AWS::AccountId" },
+                      "/*"
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "Metadata": {
+          "aws:cdk:path": "CloudTrailStack/CloudTrailBucket/Policy/Resource"
+        }
+      },
+      "CloudTrailLogGroup343A29D6": {
+        "Type": "AWS::Logs::LogGroup",
+        "Properties": {
+          "RetentionInDays": 365
+        },
+        "UpdateReplacePolicy": "Retain",
+        "DeletionPolicy": "Retain",
+        "Metadata": {
+          "aws:cdk:path": "CloudTrailStack/CloudTrailLogGroup/Resource"
+        }
+      },
+      "CloudTrailRole9EE963D2": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "cloudtrail.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          }
+        },
+        "Metadata": {
+          "aws:cdk:path": "CloudTrailStack/CloudTrailRole/Resource"
+        }
+      },
+      "CloudTrailRoleDefaultPolicy5FF2FCDE": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+          "PolicyName": "CloudTrailRoleDefaultPolicy5FF2FCDE",
+          "Roles": [{ "Ref": "CloudTrailRole9EE963D2" }],
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::GetAtt": ["CloudTrailLogGroup343A29D6", "Arn"]
+                }
+              },
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "s3:Abort*",
+                  "s3:PutObject",
+                  "s3:PutObjectAcl",
+                  "s3:PutObjectLegalHold",
+                  "s3:PutObjectRetention",
+                  "s3:PutObjectTagging",
+                  "s3:PutObjectVersionAcl",
+                  "s3:PutObjectVersionTagging"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      { "Fn::GetAtt": ["CloudTrailBucket98B0BFE1", "Arn"] },
+                      "/*"
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "Metadata": {
+          "aws:cdk:path": "CloudTrailStack/CloudTrailRole/DefaultPolicy/Resource"
+        }
+      },
+      "CloudTrailLogsRole9F6E6663": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "cloudtrail.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          }
+        },
+        "Metadata": {
+          "aws:cdk:path": "CloudTrailStack/CloudTrail/LogsRole/Resource"
+        }
+      },
+      "CloudTrailLogsRoleDefaultPolicyD9019B15": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+          "PolicyName": "CloudTrailLogsRoleDefaultPolicyD9019B15",
+          "Roles": [{ "Ref": "CloudTrailLogsRole9F6E6663" }],
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::GetAtt": ["CloudTrailLogGroup343A29D6", "Arn"]
+                }
+              }
+            ]
+          }
+        },
+        "Metadata": {
+          "aws:cdk:path": "CloudTrailStack/CloudTrail/LogsRole/DefaultPolicy/Resource"
+        }
+      },
+      "CloudTrailA62D711D": {
+        "Type": "AWS::CloudTrail::Trail",
+        "Properties": {
+          "CloudWatchLogsLogGroupArn": {
+            "Fn::GetAtt": ["CloudTrailLogGroup343A29D6", "Arn"]
+          },
+          "CloudWatchLogsRoleArn": {
+            "Fn::GetAtt": ["CloudTrailLogsRole9F6E6663", "Arn"]
+          },
+          "EnableLogFileValidation": true,
+          "EventSelectors": [
+            {
+              "IncludeManagementEvents": true,
+              "ReadWriteType": "All"
+            },
+            {
+              "IncludeManagementEvents": false,
+              "ReadWriteType": "WriteOnly",
+              "DataResources": [
+                {
+                  "Type": "AWS::S3::Object",
+                  "Values": ["arn:aws:s3"]
+                }
+              ]
+            }
+          ],
+          "IncludeGlobalServiceEvents": true,
+          "IsLogging": true,
+          "IsMultiRegionTrail": true,
+          "S3BucketName": { "Ref": "CloudTrailBucket98B0BFE1" },
+          "TrailName": "s3cdkdemo"
+        },
+        "DependsOn": [
+          "CloudTrailLogsRoleDefaultPolicyD9019B15",
+          "CloudTrailLogsRole9F6E6663",
+          "CloudTrailBucketPolicy2A856177"
+        ],
+        "Metadata": {
+          "aws:cdk:path": "CloudTrailStack/CloudTrail/Resource"
+        }
+      }
+    }
+  }
+  

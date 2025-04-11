@@ -1,0 +1,223 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+      "EventBusPolicy": {
+        "Type": "AWS::Events::EventBusPolicy",
+        "Properties": {
+          "Action": "events:PutEvents",
+          "EventBusName": "default",
+          "Principal": "156041406847",
+          "StatementId": "AllowTargetAccountPutEvents"
+        },
+        "Metadata": {
+          "aws:cdk:path": "EventBusStack/EventBusPolicy"
+        }
+      },
+      "EventBridgeTargetRole9C46FD21": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "events.amazonaws.com"
+                }
+              },
+              {
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "events.amazonaws.com"
+                },
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceArn": {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:events:",
+                          { "Ref": "AWS::Region" },
+                          ":",
+                          { "Ref": "AWS::AccountId" },
+                          ":rule/forwards3events"
+                        ]
+                      ]
+                    },
+                    "aws:SourceAccount": { "Ref": "AWS::AccountId" }
+                  }
+                }
+              }
+            ]
+          },
+          "Policies": [
+            {
+              "PolicyName": "InlinePolicy",
+              "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Action": "events:PutEvents",
+                    "Effect": "Allow",
+                    "Resource": {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:events:",
+                          { "Ref": "AWS::Region" },
+                          ":156041406847:event-bus/s3receiverbus"
+                        ]
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "Metadata": {
+          "aws:cdk:path": "EventBusStack/EventBridgeTargetRole/Resource"
+        }
+      },
+      "EventBridgeTargetRoleDefaultPolicy46B940A1": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+          "PolicyName": "EventBridgeTargetRoleDefaultPolicy46B940A1",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Action": "events:PutEvents",
+                "Effect": "Allow",
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:events:",
+                      { "Ref": "AWS::Region" },
+                      ":156041406847:event-bus/s3receiverbus"
+                    ]
+                  ]
+                }
+              }
+            ]
+          },
+          "Roles": [
+            { "Ref": "EventBridgeTargetRole9C46FD21" }
+          ]
+        },
+        "Metadata": {
+          "aws:cdk:path": "EventBusStack/EventBridgeTargetRole/DefaultPolicy/Resource"
+        }
+      },
+      "ForwardS3EventsRule4062DEA6": {
+        "Type": "AWS::Events::Rule",
+        "Properties": {
+          "EventBusName": "default",
+          "EventPattern": {
+            "source": ["aws.s3"],
+            "detail-type": ["AWS API Call via CloudTrail"],
+            "detail": {
+              "eventSource": ["s3.amazonaws.com"],
+              "eventName": ["PutObject"]
+            }
+          },
+          "Name": "forwards3events",
+          "State": "ENABLED",
+          "Targets": [
+            {
+              "Arn": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:events:",
+                    { "Ref": "AWS::Region" },
+                    ":156041406847:event-bus/s3receiverbus"
+                  ]
+                ]
+              },
+              "Id": "Target0",
+              "RoleArn": {
+                "Fn::GetAtt": [
+                  "EventBridgeTargetRole9C46FD21",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        },
+        "Metadata": {
+          "aws:cdk:path": "EventBusStack/ForwardS3EventsRule/Resource"
+        }
+      },
+      "CDKMetadata": {
+        "Type": "AWS::CDK::Metadata",
+        "Properties": {
+          "Analytics": "v2:deflate64:H4sIAAAAAAAA/5VRwWoCMRD9FnMsMVXpQbypeOilLKs3Wco0GW00m8gmUSTk30s2kSpCoYeQzLx5byZvJmw8nbLRAC52yMVxqOQXC2sH/EhrtMZ3HLfkhdByGgoX+xnwjNpZFpY7vUrPhbeVUZJfae0VbgPpvMIPaJHMeiKWovuwAuew02QWSO5TQIEOpNpcT4+JPoiRBgJCrB4Etv9RaIrEBro9ukSOTWzocqfT6JFKaFmoTf8LsNa3KBbXNOSpk5rLE6g558ZrV7RzTSLMuZNG5y6USK2kxt4VibZkc2dT3aSyaWWIhDoH/Pv9l5qwZPvfYB7fKKQ532/sRtiYhDzpPKeFWDtw2KbV3vuSNWOMVBuB7GBfz5MJG7+x0eBgpRx2XjvZIqvz/QMndwIlUgIAAA=="
+        },
+        "Metadata": {
+          "aws:cdk:path": "EventBusStack/CDKMetadata/Default"
+        },
+        "Condition": "CDKMetadataAvailable"
+      }
+    },
+    "Conditions": {
+      "CDKMetadataAvailable": {
+        "Fn::Or": [
+          {
+            "Fn::Or": [
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "af-south-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "ap-east-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "ap-northeast-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "ap-northeast-2"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "ap-northeast-3"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "ap-south-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "ap-south-2"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "ap-southeast-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "ap-southeast-2"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "ap-southeast-3"] }
+            ]
+          },
+          {
+            "Fn::Or": [
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "ap-southeast-4"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "ca-central-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "ca-west-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "cn-north-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "cn-northwest-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "eu-central-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "eu-central-2"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "eu-north-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "eu-south-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "eu-south-2"] }
+            ]
+          },
+          {
+            "Fn::Or": [
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "eu-west-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "eu-west-2"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "eu-west-3"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "il-central-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "me-central-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "me-south-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "sa-east-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "us-east-1"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "us-east-2"] },
+              { "Fn::Equals": [{ "Ref": "AWS::Region" }, "us-west-1"] }
+            ]
+          },
+          { "Fn::Equals": [{ "Ref": "AWS::Region" }, "us-west-2"] }
+        ]
+      }
+    },
+    "Parameters": {
+      "BootstrapVersion": {
+        "Type": "AWS::SSM::Parameter::Value<String>",
+        "Default": "/cdk-bootstrap/hnb659fds/version",
+        "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+      }
+    }
+  }
+  
