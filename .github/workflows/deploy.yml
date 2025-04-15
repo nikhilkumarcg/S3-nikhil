@@ -25,9 +25,6 @@ jobs:
 
     - name: Update kubeconfig
       run: aws eks update-kubeconfig --region us-east-1 --name eksdemo
-           kubectl version --short
-           aws sts get-caller-identity
-           kubectl get nodes
 
     - name: Apply Kubernetes manifests
       run: kubectl apply -f manifests/ -n otel
