@@ -8,16 +8,11 @@ import { EventBusDestinationStack } from '../lib/eventbusdestination';
 import { GrafanaCdkStack } from '../lib/grafana'; // Assuming this exists
 const app = new cdk.App();
  
-new CloudTrailStack(app, 'CloudTrailStack', {});
-new EventBusStack(app, 'EventBusStack', {});
-new EventBusDestinationStack(app, 'EventBusDestinationStack', {});
-new GrafanaCdkStack(app, 'GrafanaCdkStack', {});
-// Source Account Deployment
 // new DeploymentStage(app, 'SourceDeployment-820186421740', {
 //   env: { account: '820186421740', region: 'us-east-1' }
 // });
 
-// Central Account Deployment
+// //Central Account Deployment
 // new DeploymentStage(app, 'CentralDeployment', {
 //   env: { account: '156041406847', region: 'us-east-1' }
 // });
