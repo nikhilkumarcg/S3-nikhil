@@ -4,5 +4,5 @@ metadata:
   name: otel-sa
   namespace: otel
   annotations:
-    eks.amazonaws.com/role-arn: "arn:aws:iam::156041406847:role/OpenTelemetryRole"
+    eks.amazonaws.com/role-arn: "arn:aws:iam::622447707088:role/OpenTelemetryRole"
 

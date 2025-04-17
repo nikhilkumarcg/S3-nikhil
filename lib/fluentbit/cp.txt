@@ -1,0 +1,23 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": ["oam:CreateLink", "oam:UpdateLink"],
+            "Resource": "*",
+            "Condition": {
+                "ForAllValues:StringEquals": {
+                    "oam:ResourceTypes": [
+                        "AWS::Logs::LogGroup",
+                        "AWS::CloudWatch::Metric",
+                        "AWS::XRay::Trace"
+                    ]
+                },
+                "ForAnyValue:StringLike": {
+                    "aws:PrincipalOrgPaths": "o-bnyvy9a0bt/r-lrgc/ou-lrgc-q5rqn6hf/*"
+                }
+            }
+        }
+    ]
+}

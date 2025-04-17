@@ -13,8 +13,8 @@ data:
     receivers:
       otlp:
         protocols:
-          grpc: {}
-          http: {}
+          grpc:
+          http:
 
       hostmetrics:
         scrapers:
@@ -28,11 +28,7 @@ data:
       prometheus:
         config:
           scrape_configs:
-            - job_name: 'otel-collector'
-              scrape_interval: 10s
-              static_configs:
-                - targets: ['127.0.0.1:9464']
-
+            # Control Plane Metrics
             - job_name: 'kubernetes-control-plane'
               scrape_interval: 10s
               kubernetes_sd_configs:
@@ -42,6 +38,7 @@ data:
                   regex: 'kube-apiserver|kube-scheduler|kube-controller-manager'
                   action: keep
 
+            # Pod-Level Metrics
             - job_name: 'kubernetes-pods'
               scrape_interval: 10s
               kubernetes_sd_configs:
@@ -66,6 +63,12 @@ data:
                   regex: (.+)
                   replacement: $1
 
+            # OTEL Collector Metrics (Self-Scraping)
+            - job_name: 'otel-collector'
+              scrape_interval: 10s
+              static_configs:
+                - targets: ['127.0.0.1:9464']
+
       kubeletstats:
         collection_interval: 10s
         auth_type: serviceAccount
@@ -79,33 +82,36 @@ data:
         auth_type: serviceAccount
 
     processors:
-      batch: {}
+      batch:
 
     exporters:
       debug:
         verbosity: detailed
 
-      awscloudwatchlogs:
-        region: "eu-west-2"
-        log_group_name: "/aws/otel/logs"
-        log_stream_name: "otel-eks-acc"
-
       awsemf:
         region: "eu-west-2"
         namespace: "OtelMetrics"
+        log_group_name: "/aws/eks/otel-metrics"
         dimension_rollup_option: "NoDimensionRollup"
         resource_to_telemetry_conversion:
           enabled: true
         metric_declarations:
+          # Pod-Level Metrics
           - dimensions: [["k8s.namespace.name", "k8s.pod.name"]]
             metric_name_selectors:
               - "^k8s.container.*"
+
+          # Node-Level Metrics
           - dimensions: [["k8s.node.name"]]
             metric_name_selectors:
               - "^k8s.node.*"
+
+          # Namespace-Level Metrics
           - dimensions: [["k8s.namespace.name"]]
             metric_name_selectors:
               - "^k8s.namespace.*"
+
+          # Cluster-Level Metrics
           - dimensions: [["ClusterName"]]
             metric_name_selectors:
               - "^cluster.*"
